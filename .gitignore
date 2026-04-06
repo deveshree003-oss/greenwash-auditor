@@ -10,5 +10,8 @@ __pycache__/
 .env
 .env.*
 
+## Allow example env files to be tracked
+!**/.env.example
+
 .DS_Store
 Thumbs.db
