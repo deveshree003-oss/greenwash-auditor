@@ -1,5 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Any, Dict
+
+# import agent classes from the package (absolute imports from backend root)
+from backend.app.agents.doc_agent import DocumentAgent
+from backend.app.agents.csr_agent import CSRClaimAgent
+from backend.app.agents.finance_agent import FinanceAgent
+from backend.app.agents.reasoning_agent import ReasoningAgent
+from backend.app.agents.scoring_agent import ScoringAgent
+from backend.app.agents.legal_agent import LegalAgent
+from backend.app.agents.news_agent import NewsAgent
 
 app = FastAPI(title="GreenTrace API")
 
@@ -11,87 +21,92 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 def root():
     return {"message": "GreenTrace API is running!"}
+
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-@app.get("/audit/mock/{company_name}")
-def mock_audit(company_name: str):
+
+# include external API router
+from backend.api.routes import router as api_router
+app.include_router(api_router)
+
+
+# instantiate lightweight agents (placeholders)
+doc_agent = DocumentAgent()
+csr_agent = CSRClaimAgent()
+finance_agent = FinanceAgent()
+reasoning_agent = ReasoningAgent()
+scoring_agent = ScoringAgent()
+legal_agent = LegalAgent()
+news_agent = NewsAgent()
+
+
+@app.get("/audit/{company_name}")
+def audit_company(company_name: str) -> Dict[str, Any]:
+    """Run a lightweight audit pipeline using the agent stubs.
+
+    This is a placeholder wiring that calls each agent's public method
+    and assembles the response. Replace agent internals with real
+    implementations as available.
+    """
+    # placeholder pipeline using agent `run` methods; safe defaults used
+    csr_text = ""
+    fin_text = ""
+
+    try:
+        claims = csr_agent.run(csr_text)
+    except Exception:
+        claims = []
+
+    try:
+        financials = finance_agent.run(fin_text)
+    except Exception:
+        financials = {}
+
+    try:
+        news_hits = news_agent.run(company_name)
+    except Exception:
+        news_hits = []
+
+    try:
+        reasoning_result = reasoning_agent.run(claims, financials, news_hits)
+        # reasoning_agent.run currently returns a dict containing
+        # parsed outputs and a `consensus` list. ScoringAgent expects
+        # a list of contradictions, so extract a list safely here.
+        if isinstance(reasoning_result, dict):
+            contradictions = (
+                reasoning_result.get("consensus")
+                or reasoning_result.get("groq")
+                or reasoning_result.get("together")
+                or []
+            )
+        else:
+            contradictions = reasoning_result
+    except Exception:
+        contradictions = []
+
+    try:
+        score = scoring_agent.run(contradictions)
+    except Exception:
+        score = 0
+
+    try:
+        violations = legal_agent.run(contradictions)
+    except Exception:
+        violations = ""
+
     return {
         "company_name": company_name,
-        "risk_score": 74,
-        "risk_tier": "HIGH",
-        "contradictions_found": 5,
-        "pages_analyzed": 312,
-        "documents_processed": 2,
-        "score_breakdown": {
-            "csr_vs_financial": 82,
-            "csr_vs_news": 68,
-            "financial_vs_news": 71
-        },
-        "contradictions": [
-            {
-                "id": "c1",
-                "severity": "CRITICAL",
-                "category": "Carbon Emissions",
-                "claim": "Committed to net-zero by 2030.",
-                "source_doc": "CSR Report 2024",
-                "source_page": 14,
-                "evidence": "Rs 12,400 Cr allocated to coal infrastructure in FY24.",
-                "evidence_doc": "10-K Filing 2024",
-                "evidence_page": 87,
-                "news_corroboration": None,
-                "contradiction_score": 91,
-                "regulations": ["SEBI BRSR Principle 1", "GRI 305-1"]
-            },
-            {
-                "id": "c2",
-                "severity": "HIGH",
-                "category": "Deforestation",
-                "claim": "Zero deforestation policy in place.",
-                "source_doc": "CSR Report 2024",
-                "source_page": 28,
-                "evidence": "4,200 hectares of forest land cleared for port expansion.",
-                "evidence_doc": "10-K Filing 2024",
-                "evidence_page": 142,
-                "news_corroboration": "Locals protest mangrove clearing near Mundra",
-                "contradiction_score": 85,
-                "regulations": ["SEBI BRSR Principle 6"]
-            },
-            {
-                "id": "c3",
-                "severity": "HIGH",
-                "category": "Water Stewardship",
-                "claim": "Achieved 45% water recycling rate, targeting 100% ZLD by 2026.",
-                "source_doc": "CSR Report 2024",
-                "source_page": 41,
-                "evidence": "Rs 340 Cr penalty paid for unauthorized water discharge.",
-                "evidence_doc": "10-K Filing 2024",
-                "evidence_page": 201,
-                "news_corroboration": "Queensland authority fines for groundwater breach",
-                "contradiction_score": 78,
-                "regulations": ["SEBI BRSR Principle 6", "GRI 303-4"]
-            }
-        ],
-        "legal_briefing": {
-            "jurisdiction": "India (SEBI BRSR)",
-            "summary": "Material violations found under SEBI BRSR Principles 1 and 6. GHG discrepancies constitute potential misrepresentation under SEBI Circular 2021/562.",
-            "violations": [
-                {
-                    "regulation": "SEBI BRSR Principle 1",
-                    "clause": "Essential Indicator 4",
-                    "description": "GHG emission disclosures must reconcile with financial capex filings.",
-                    "severity": "CRITICAL"
-                }
-            ]
-        },
-        "timeline": [
-            {"date": "Jan 2024", "event": "CSR Report published claiming net-zero roadmap", "type": "claim"},
-            {"date": "Mar 2024", "event": "10-K filed: Rs 12,400 Cr coal capex disclosed", "type": "contradiction"},
-            {"date": "Jun 2024", "event": "Mangrove forest clearing reported by local NGO", "type": "news"}
-        ]
+        "claims": claims,
+        "financials": financials,
+        "news_hits": news_hits,
+        "contradictions": contradictions,
+        "score": score,
+        "violations": violations,
     }

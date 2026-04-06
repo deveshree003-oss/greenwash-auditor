@@ -28,6 +28,10 @@ export default function AuditReport() {
 
     if (!location.state?.prefetchedReport || location.state?.prefetchedReport.id !== companyId) {
       loadReport();
+    } else {
+      // debug: log the prefetched report so we can see what the UI receives
+      // eslint-disable-next-line no-console
+      console.log('Using prefetched report', location.state.prefetchedReport);
     }
 
     return () => {
@@ -130,9 +134,9 @@ export default function AuditReport() {
               </div>
 
               <div className="card-stack">
-                {report.contradictions.length ? (
+                {Array.isArray(report.contradictions) && report.contradictions.length ? (
                   report.contradictions.map((item, index) => (
-                    <ContradictionCard key={item.id} item={item} index={index} />
+                    <ContradictionCard key={item.id || `c-${index}`} item={item} index={index} />
                   ))
                 ) : (
                   <div className="surface">

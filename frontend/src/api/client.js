@@ -45,6 +45,30 @@ export async function runAudit(payload) {
 
     return response.data;
   } catch (error) {
+    // If the proxied request failed (vite proxy not running or 404),
+    // try the backend directly before returning demo mock data.
+    try {
+      const formData = new FormData();
+      if (payload.company) formData.append('company', payload.company);
+      if (payload.csrUrl) formData.append('csr_url', payload.csrUrl);
+      if (payload.tenKUrl) formData.append('tenk_url', payload.tenKUrl);
+      if (payload.csrFile) formData.append('csr_file', payload.csrFile);
+      if (payload.tenKFile) formData.append('tenk_file', payload.tenKFile);
+
+      const direct = await fetch('http://127.0.0.1:8000/audit', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (direct.ok) {
+        const data = await direct.json();
+        return data;
+      }
+    } catch (directErr) {
+      // swallow and fall back to mock below
+      // console.debug('Direct backend attempt failed', directErr);
+    }
+
     await wait(800);
     const fallbackKey =
       Object.keys(mockAuditReports).find((key) =>
@@ -100,4 +124,20 @@ export function downloadAuditSummary(report) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+// Direct helper to POST two file objects (`csrFile`, `financeFile`) to
+// the backend `/audit` endpoint running on localhost:8000. Use when you
+// want to call the Python FastAPI server directly instead of the proxy.
+export async function runAuditFiles(csrFile, financeFile) {
+  const formData = new FormData();
+  formData.append('csr', csrFile);
+  formData.append('finance', financeFile);
+
+  const res = await fetch('http://localhost:8000/audit', {
+    method: 'POST',
+    body: formData,
+  });
+
+  return res.json();
 }

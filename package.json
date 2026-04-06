@@ -1,0 +1,9 @@
+{
+  "name": "greenwash-auditor",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "install:frontend": "cd frontend && npm install"
+  }
+}
